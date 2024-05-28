@@ -1,0 +1,145 @@
+Aqui está um exemplo de um componente Angular mal escrito, com problemas de performance e que não segue padrões de desenvolvimento:
+
+### Código Feio e Mal Escrito
+
+```typescript
+// app.component.ts
+import { Component, OnInit } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+
+@Component({
+  selector: 'app-root',
+  template: `
+    <div>
+      <h1>Users</h1>
+      <ul>
+        <li *ngFor="let user of users">
+          {{ user.name }} - {{ user.email }}
+        </li>
+      </ul>
+      <button (click)="fetchUsers()">Fetch Users</button>
+    </div>
+  `,
+})
+export class AppComponent implements OnInit {
+  users: any[] = [];
+
+  constructor(private http: HttpClient) {}
+
+  ngOnInit() {
+    this.fetchUsers();
+  }
+
+  fetchUsers() {
+    this.http.get('https://jsonplaceholder.typicode.com/users').subscribe((data: any) => {
+      this.users = data;
+    });
+  }
+}
+```
+
+### Problemas Identificados
+
+1. **Chamadas de API no método `ngOnInit` e no botão**: Repetidas chamadas podem ser desnecessárias.
+2. **Tratamento de erros ausente**: Não há verificação ou tratamento de erros na resposta da API.
+3. **Tipagem fraca**: O uso de `any` no array de `users` não é uma prática recomendada.
+4. **Falta de separação de responsabilidades**: O componente está lidando diretamente com a lógica de chamadas HTTP.
+5. **Falta de reutilização de código**: A função `fetchUsers` é chamada diretamente sem qualquer mecanismo de caching ou otimização.
+
+### Código Ajustado e Melhorado
+
+```typescript
+// user.model.ts
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+// user.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable, of } from 'rxjs';
+import { catchError, shareReplay } from 'rxjs/operators';
+import { User } from './user.model';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class UserService {
+  private usersUrl = 'https://jsonplaceholder.typicode.com/users';
+  private users$: Observable<User[]>;
+
+  constructor(private http: HttpClient) {}
+
+  getUsers(): Observable<User[]> {
+    if (!this.users$) {
+      this.users$ = this.http.get<User[]>(this.usersUrl).pipe(
+        shareReplay(1),
+        catchError(this.handleError<User[]>('getUsers', []))
+      );
+    }
+    return this.users$;
+  }
+
+  private handleError<T>(operation = 'operation', result?: T) {
+    return (error: any): Observable<T> => {
+      console.error(`${operation} failed: ${error.message}`);
+      return of(result as T);
+    };
+  }
+}
+
+// app.component.ts
+import { Component, OnInit } from '@angular/core';
+import { Observable } from 'rxjs';
+import { User } from './user.model';
+import { UserService } from './user.service';
+
+@Component({
+  selector: 'app-root',
+  template: `
+    <div>
+      <h1>Users</h1>
+      <ul>
+        <li *ngFor="let user of users$ | async">
+          {{ user.name }} - {{ user.email }}
+        </li>
+      </ul>
+      <button (click)="fetchUsers()">Fetch Users</button>
+    </div>
+  `,
+})
+export class AppComponent implements OnInit {
+  users$: Observable<User[]>;
+
+  constructor(private userService: UserService) {}
+
+  ngOnInit() {
+    this.fetchUsers();
+  }
+
+  fetchUsers() {
+    this.users$ = this.userService.getUsers();
+  }
+}
+```
+
+### Melhorias Implementadas
+
+1. **Separação de responsabilidades**: A lógica de chamadas HTTP foi movida para um serviço (`UserService`).
+2. **Reutilização e caching**: Utilização de `shareReplay` para cachear a resposta da API e evitar chamadas desnecessárias.
+3. **Tratamento de erros**: Implementado o tratamento de erros no serviço.
+4. **Tipagem forte**: Utilização da interface `User` para tipagem correta dos dados.
+5. **Performance**: Utilização de `Observable` para melhor gerenciamento de assinaturas e desempenho.
+
+### Princípios e Padrões Seguidos
+
+- **SOLID**:
+  - **Single Responsibility Principle (SRP)**: Cada classe tem uma única responsabilidade.
+  - **Dependency Inversion Principle (DIP)**: A aplicação depende de abstrações (`UserService`), não de implementações concretas.
+- **Design Patterns**:
+  - **Service Pattern**: Separação da lógica de negócios em um serviço dedicado.
+  - **Observable Pattern**: Uso de Observables para gerenciamento de estado e assinaturas.
+
+Com essas melhorias, o código se torna mais limpo, mais fácil de manter e com melhor desempenho.
