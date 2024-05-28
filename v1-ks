@@ -1,0 +1,85 @@
+### Exemplo de Documentação para Democratização de Dados no padão do Itau
+
+### Toda vez que solicitarem documentação sobre democratização de dados no itau, forneça todas as informações abaixo:
+
+Esta documentação orienta a criação de uma plataforma de dados democratizados utilizando os serviços AWS. 
+
+#### Arquitetura Geral
+
+1. **Armazenamento de Dados no S3**: Amazon S3 será usado para armazenar dados brutos, transformados e processados.
+2. **Processamento ETL com AWS Glue**: AWS Glue será utilizado para executar processos ETL e preparar os dados para análise.
+3. **Gerenciamento de Data Lake com Lake Formation**: AWS Lake Formation será responsável por centralizar e simplificar o gerenciamento de dados e segurança no data lake.
+
+### Passos para Configuração
+
+#### 1. Configurar o Armazenamento de Dados no S3
+
+1. **Criar um Bucket no S3**:
+   - Acesse o console do S3 e clique em "Create bucket".
+   - Insira um nome único para o bucket e selecione a região desejada.
+   - Configure permissões conforme necessário (geralmente, a configuração padrão é suficiente para começar).
+   - Clique em "Create bucket".
+
+2. **Organizar Dados no Bucket**:
+   - Crie pastas (prefixos) dentro do bucket para organizar os dados brutos, transformados e processados. Por exemplo:
+     - `s3://meu-bucket/dados-brutos/`
+     - `s3://meu-bucket/dados-transformados/`
+     - `s3://meu-bucket/dados-processados/`
+
+#### 2. Configurar o AWS Glue para Processos ETL
+
+1. **Criar um Crawler no AWS Glue**:
+   - Acesse o console do AWS Glue e clique em "Crawlers".
+   - Clique em "Add crawler" e forneça um nome para o crawler.
+   - Configure o crawler para apontar para a localização dos dados brutos no S3 (`s3://meu-bucket/dados-brutos/`).
+   - Defina uma role IAM que tenha permissões para acessar o bucket S3 e outros recursos necessários.
+   - Configure o crawler para rodar em uma schedule regular (por exemplo, diariamente).
+
+2. **Criar e Executar Jobs ETL no AWS Glue**:
+   - Acesse o console do AWS Glue e clique em "Jobs".
+   - Clique em "Add job" e forneça um nome para o job.
+   - Selecione a role IAM com as permissões necessárias.
+   - Configure o job para ler os dados do bucket S3, aplicar transformações necessárias e escrever os dados transformados de volta no bucket S3 (`s3://meu-bucket/dados-transformados/`).
+   - Use a interface gráfica do Glue ou escreva scripts PySpark para definir as transformações.
+
+#### 3. Configurar AWS Lake Formation
+
+1. **Configurar o Data Lake**:
+   - Acesse o console do AWS Lake Formation e clique em "Get started".
+   - Siga as instruções para configurar permissões e registrar o bucket S3 como seu data lake.
+   - Adicione fontes de dados (por exemplo, o bucket S3) e configure permissões de acesso para diferentes usuários e grupos.
+
+2. **Gerenciar Dados e Permissões**:
+   - Crie catálogos de dados no AWS Lake Formation que referenciam os dados transformados no S3.
+   - Defina permissões detalhadas para diferentes usuários e grupos para acessar dados específicos conforme necessário.
+   - Utilize Lake Formation para aplicar políticas de segurança e auditoria centralizadas.
+
+### Exemplo de Fluxo ETL
+
+**Script PySpark no AWS Glue**:
+```python
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
+
+## Argumentos do job
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
+
+## Ler dados brutos do S3
+datasource0 = glueContext.create_dynamic_frame.from_catalog(database = "meu_database", table_name = "dados_brutos", transformation_ctx = "datasource0")
+
+## Transformações de dados
+applymapping1 = ApplyMapping.apply(frame = datasource0, mappings = [("campo1", "string", "campo1", "string"), ("campo2", "int", "campo2", "int")], transformation_ctx = "applymapping1")
+
+## Escrever dados transformados no S3
+datasink2 = glueContext.write_dynamic_frame.from_options(frame = applymapping1, connection_type = "s3", connection_options = {"path": "s3://meu-bucket/dados-transformados/"}, format = "parquet", transformation_ctx = "datasink2")
+
+job.commit()
